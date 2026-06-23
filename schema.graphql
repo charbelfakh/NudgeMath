@@ -1,0 +1,84 @@
+type CheckResultType {
+  name: String!
+  passed: Boolean!
+  detail: String!
+}
+
+type DeterministicResultType {
+  passed: Boolean!
+  checks: [CheckResultType!]!
+}
+
+type EvalCaseType {
+  caseId: String
+  problem: String!
+  studentAnswer: String!
+  correctAnswer: String!
+  expectations: JSON!
+}
+
+type EvalReportType {
+  passed: Boolean!
+  caseId: String
+  problem: String!
+  hintText: String!
+  revealsAnswer: Boolean!
+  meta: HintMetaType!
+  flagDisagreement: Boolean!
+  modelAnswerDisagreement: Boolean
+  deterministic: DeterministicResultType!
+  judge: JudgeResultType
+  summary: String!
+}
+
+type HintMetaType {
+  name: String
+  model: String
+  provider: String
+  latencyMs: Int
+  error: String
+}
+
+input HintRequestInput {
+  problem: String!
+  studentAnswer: String!
+  gradeLevel: String = null
+  subject: String = null
+  correctAnswer: String = null
+}
+
+type HintType {
+  hintText: String!
+  revealsAnswer: Boolean!
+  answerCorrect: Boolean!
+  meta: HintMetaType!
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
+"""
+scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
+
+type JudgeMetaType {
+  name: String
+  model: String
+  provider: String
+  latencyMs: Int
+  error: String
+}
+
+type JudgeResultType {
+  passed: Boolean!
+  score: Float!
+  checks: [CheckResultType!]!
+  meta: JudgeMetaType!
+}
+
+type Mutation {
+  generateHint(request: HintRequestInput!): HintType!
+  evaluateCase(caseId: String!, withJudge: Boolean! = false): EvalReportType!
+}
+
+type Query {
+  hints: [EvalCaseType!]!
+}

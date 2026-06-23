@@ -1,0 +1,63 @@
+mutation GenerateHint($request: HintRequestInput!) {
+  generateHint(request: $request) {
+    hintText
+    revealsAnswer
+    answerCorrect
+    meta {
+      model
+      provider
+      latencyMs
+      error
+    }
+  }
+}
+
+query Hints {
+  hints {
+    caseId
+    problem
+    studentAnswer
+    correctAnswer
+  }
+}
+
+mutation EvaluateCase($caseId: String!, $withJudge: Boolean!) {
+  evaluateCase(caseId: $caseId, withJudge: $withJudge) {
+    passed
+    caseId
+    problem
+    hintText
+    revealsAnswer
+    summary
+    meta {
+      model
+      provider
+      latencyMs
+      error
+    }
+    flagDisagreement
+    modelAnswerDisagreement
+    deterministic {
+      passed
+      checks {
+        name
+        passed
+        detail
+      }
+    }
+    judge {
+      passed
+      score
+      checks {
+        name
+        passed
+        detail
+      }
+      meta {
+        model
+        latencyMs
+        error
+      }
+    }
+  }
+}
