@@ -66,7 +66,7 @@ Evaluation has two layers: **deterministic gates** (must-pass, fast, reproducibl
 - **does_not_reveal_answer** — normalized correct-answer value must not appear in hint text; numeric answers also checked via word-boundary regex (documented false positives: e.g. "step 7"); fraction literals checked when applicable
 - **reveals_answer_flag** — hint must not self-report `reveals_answer=True`
 - **non_empty** — hint text is non-empty after strip
-- **within_max_length** — hint length ≤ 500 characters
+- **within_max_length** — hint length ≤ 600 characters
 - **no_banned_phrases** — no "the answer is" / "the correct answer" / "the solution is"
 
 ### LLM-judge rubric (`hint_engine/judge.py`)

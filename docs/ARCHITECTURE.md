@@ -7,7 +7,7 @@ Contract-first stack: shapes are defined once in Python and propagated through e
 ```mermaid
 flowchart LR
   subgraph python [Python core]
-    DC[Dataclasses<br/>HintRequest · Hint · EvalCase · EvalReport · JudgeResult]
+    DC[Dataclasses<br/>HintRequest · Hint · EvalCase · EvalReport]
     LLM[LLMClient Protocol]
     GEN[generate_hint]
     GATES[Deterministic gates]
@@ -98,7 +98,7 @@ This is stated explicitly in the README — a deliberate product boundary, not a
 1. `does_not_reveal_answer` — normalized value + numeric/fraction regex (documented false positives)
 2. `reveals_answer_flag` — model self-report must not claim leakage
 3. `non_empty`
-4. `within_max_length` (500 chars)
+4. `within_max_length` (600 chars)
 5. `no_banned_phrases`
 
 ### Judge rubric (four)
