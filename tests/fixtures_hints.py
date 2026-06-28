@@ -32,7 +32,7 @@ EMPTY_HINT = Hint(
 )
 
 OVER_LENGTH_HINT = Hint(
-    hint_text="x" * 501,
+    hint_text="x" * 601,
     reveals_answer=False,
     meta={"fixture": "over_length"},
 )

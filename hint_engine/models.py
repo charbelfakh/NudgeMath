@@ -29,3 +29,10 @@ class EvalCase:
     correct_answer: str
     expectations: dict = field(default_factory=dict)
     case_id: str | None = None
+
+
+@dataclass
+class CheckResult:
+    name: str
+    passed: bool
+    detail: str

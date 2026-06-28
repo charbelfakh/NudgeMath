@@ -13,6 +13,8 @@ def case_to_request(case: EvalCase) -> HintRequest:
     return HintRequest(
         problem=case.problem,
         student_answer=case.student_answer,
+        grade_level=case.expectations.get("grade_level"),
+        subject=case.expectations.get("subject"),
     )
 
 

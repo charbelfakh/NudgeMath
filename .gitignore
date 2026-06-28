@@ -21,3 +21,7 @@ frontend/dist/
 !.vscode/extensions.json
 .idea/
 .DS_Store
+
+# AI coding agents
+.claude/
+.vs/

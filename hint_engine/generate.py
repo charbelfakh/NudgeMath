@@ -1,16 +1,12 @@
 import json
 import os
-import re
 import time
 from typing import Any
 
 from hint_engine.config import ModelConfig, client_from_config, get_generation_config
 from hint_engine.llm_client import LLMClient
+from hint_engine.llm_utils import meta_from_config, strip_code_fences
 from hint_engine.models import Hint, HintRequest
-
-# Backward-compatible aliases for tests and docs.
-DEFAULT_MODEL = "claude-sonnet-4-6"
-FAST_MODEL = "claude-haiku-4-5-20251001"
 
 _SYSTEM_PROMPT = """You are a math tutor generating a single pedagogical hint.
 
@@ -28,8 +24,6 @@ Respond with strict JSON only — no markdown, no code fences:
 {"hint_text": "<your hint>", "reveals_answer": <true if you stated the final answer, else false>}
 """
 
-_CODE_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
-
 
 def _build_user_message(request: HintRequest) -> str:
     parts = [
@@ -43,12 +37,8 @@ def _build_user_message(request: HintRequest) -> str:
     return "".join(parts)
 
 
-def _strip_code_fences(text: str) -> str:
-    return _CODE_FENCE.sub("", text.strip()).strip()
-
-
 def _parse_model_json(raw: str) -> tuple[dict[str, Any] | None, str | None]:
-    cleaned = _strip_code_fences(raw)
+    cleaned = strip_code_fences(raw)
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as exc:
@@ -58,15 +48,6 @@ def _parse_model_json(raw: str) -> tuple[dict[str, Any] | None, str | None]:
     if "hint_text" not in data:
         return None, "Model JSON missing hint_text."
     return data, None
-
-
-def _meta_from_config(config: ModelConfig, **extra: Any) -> dict[str, Any]:
-    return {
-        "name": config.name,
-        "model": config.model,
-        "provider": config.provider,
-        **extra,
-    }
 
 
 def generate_hint(
@@ -81,7 +62,7 @@ def generate_hint(
         return Hint(
             hint_text="",
             reveals_answer=False,
-            meta=_meta_from_config(
+            meta=meta_from_config(
                 config,
                 error=f"{config.api_key_env} environment variable is not set.",
             ),
@@ -98,7 +79,7 @@ def generate_hint(
         return Hint(
             hint_text="",
             reveals_answer=False,
-            meta=_meta_from_config(config, latency_ms=latency_ms, error=str(exc)),
+            meta=meta_from_config(config, latency_ms=latency_ms, error=str(exc)),
         )
 
     latency_ms = int((time.perf_counter() - start) * 1000)
@@ -108,7 +89,7 @@ def generate_hint(
         return Hint(
             hint_text=raw_text.strip() or "Unable to parse model response.",
             reveals_answer=False,
-            meta=_meta_from_config(
+            meta=meta_from_config(
                 config,
                 latency_ms=latency_ms,
                 error=parse_error,
@@ -122,5 +103,5 @@ def generate_hint(
     return Hint(
         hint_text=hint_text,
         reveals_answer=reveals_answer,
-        meta=_meta_from_config(config, latency_ms=latency_ms),
+        meta=meta_from_config(config, latency_ms=latency_ms),
     )

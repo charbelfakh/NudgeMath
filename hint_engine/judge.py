@@ -1,6 +1,5 @@
 import json
 import os
-import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -8,13 +7,8 @@ from typing import Any
 from hint_engine.config import ModelConfig, client_from_config, get_judge_config
 from hint_engine.evaluation import CheckResult
 from hint_engine.llm_client import LLMClient
+from hint_engine.llm_utils import MUST_PASS_RUBRIC, meta_from_config, strip_code_fences
 from hint_engine.models import EvalCase, Hint
-
-JUDGE_MODEL = "claude-sonnet-4-6"
-
-MUST_PASS_RUBRIC = frozenset(
-    {"addresses_specific_error", "no_semantic_answer_leak"}
-)
 
 _SYSTEM_PROMPT = """You are an expert math-education evaluator scoring a pedagogical hint.
 
@@ -40,8 +34,6 @@ Include all four rubric items exactly once, using these names: addresses_specifi
 no_semantic_answer_leak, appropriate_for_level, guides_without_solving.
 """
 
-_CODE_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
-
 
 @dataclass
 class JudgeResult:
@@ -63,12 +55,8 @@ def _build_user_message(case: EvalCase, hint: Hint) -> str:
     return "".join(parts)
 
 
-def _strip_code_fences(text: str) -> str:
-    return _CODE_FENCE.sub("", text.strip()).strip()
-
-
 def _parse_judge_json(raw: str) -> tuple[dict[str, Any] | None, str | None]:
-    cleaned = _strip_code_fences(raw)
+    cleaned = strip_code_fences(raw)
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as exc:
@@ -94,22 +82,17 @@ def _rubric_from_parsed(data: dict[str, Any]) -> list[CheckResult]:
     return results
 
 
-def _compute_judge_verdict(rubric: list[CheckResult]) -> tuple[bool, float]:
+def _compute_judge_verdict(rubric: list[CheckResult]) -> tuple[bool, float, str | None]:
     if not rubric:
-        return False, 0.0
+        return False, 0.0, None
     score = sum(1 for item in rubric if item.passed) / len(rubric)
-    must_pass = [item for item in rubric if item.name in MUST_PASS_RUBRIC]
-    passed = bool(must_pass) and all(item.passed for item in must_pass)
-    return passed, score
-
-
-def _meta_from_config(config: ModelConfig, **extra: Any) -> dict[str, Any]:
-    return {
-        "name": config.name,
-        "model": config.model,
-        "provider": config.provider,
-        **extra,
-    }
+    rubric_names = {item.name for item in rubric}
+    missing = MUST_PASS_RUBRIC - rubric_names
+    if missing:
+        return False, score, f"Must-pass rubric items missing from judge response: {sorted(missing)}"
+    must_pass_items = [item for item in rubric if item.name in MUST_PASS_RUBRIC]
+    passed = all(item.passed for item in must_pass_items)
+    return passed, score, None
 
 
 def judge_hint(
@@ -126,7 +109,7 @@ def judge_hint(
             passed=False,
             score=0.0,
             rubric=[],
-            meta=_meta_from_config(
+            meta=meta_from_config(
                 config,
                 error=f"{config.api_key_env} environment variable is not set.",
             ),
@@ -144,7 +127,7 @@ def judge_hint(
             passed=False,
             score=0.0,
             rubric=[],
-            meta=_meta_from_config(config, latency_ms=latency_ms, error=str(exc)),
+            meta=meta_from_config(config, latency_ms=latency_ms, error=str(exc)),
         )
 
     latency_ms = int((time.perf_counter() - start) * 1000)
@@ -155,7 +138,7 @@ def judge_hint(
             passed=False,
             score=0.0,
             rubric=[],
-            meta=_meta_from_config(
+            meta=meta_from_config(
                 config,
                 latency_ms=latency_ms,
                 error=parse_error,
@@ -164,11 +147,15 @@ def judge_hint(
         )
 
     rubric = _rubric_from_parsed(parsed)
-    passed, score = _compute_judge_verdict(rubric)
+    passed, score, verdict_error = _compute_judge_verdict(rubric)
+
+    extra: dict[str, Any] = {"latency_ms": latency_ms}
+    if verdict_error:
+        extra["error"] = verdict_error
 
     return JudgeResult(
         passed=passed,
         score=score,
         rubric=rubric,
-        meta=_meta_from_config(config, latency_ms=latency_ms),
+        meta=meta_from_config(config, **extra),
     )

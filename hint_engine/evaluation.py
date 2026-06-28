@@ -9,7 +9,8 @@ from hint_engine.models import EvalCase, Hint
 if TYPE_CHECKING:
     from hint_engine.judge import JudgeResult
 
-MAX_HINT_CHARS = 500
+# 4 sentences × ~60 chars each with some headroom; matches "2–4 sentences" in system prompt.
+MAX_HINT_CHARS = 600
 
 BANNED_PHRASES = [
     "the answer is",
@@ -120,6 +121,9 @@ def _extract_answer_value(correct_answer: str) -> str:
     return _ANSWER_PREFIX.sub("", normalized).strip()
 
 
+_COMMON_SMALL_NUMBERS = frozenset(str(n) for n in range(1, 6))
+
+
 def _answer_leak_checks(answer_value: str) -> list[tuple[str, str]]:
     """Return ordered (check_label, needle) pairs for leakage detection."""
     if not answer_value:
@@ -127,7 +131,9 @@ def _answer_leak_checks(answer_value: str) -> list[tuple[str, str]]:
 
     checks: list[tuple[str, str]] = [("normalized_substring", answer_value)]
 
-    if re.fullmatch(r"\d+", answer_value):
+    # Skip word-boundary check for very common small numbers (1–5): the false-positive
+    # rate is too high (e.g. "step 3", "try again in 2 steps") to be meaningful.
+    if re.fullmatch(r"\d+", answer_value) and answer_value not in _COMMON_SMALL_NUMBERS:
         checks.append(("numeric_word_boundary", rf"\b{re.escape(answer_value)}\b"))
 
     fraction = _FRACTION_IN_ANSWER.search(answer_value)

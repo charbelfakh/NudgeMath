@@ -16,6 +16,35 @@ Correct student answer — no hint; gating only (matches seed case or optional t
 
 ![Correct answer — no hint needed](Correct_Answer.png)
 
+## Quick Start
+
+```powershell
+# 1. Create and activate the virtual environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+# 2. Pull a local model (no API key required)
+ollama pull llama3.2
+
+# 3. Terminal 1 — start the backend
+uvicorn hint_engine.api.app:app --reload
+
+# 4. Terminal 2 — start the frontend
+cd frontend
+npm install    # first time only
+npm run dev
+```
+
+Open **http://localhost:5173**.
+
+To use Anthropic instead of Ollama, set these before step 3:
+
+```powershell
+$env:LLM_DEFAULT_PROVIDER="anthropic"
+$env:ANTHROPIC_API_KEY="your-key"
+```
+
 ## Architecture & stack rationale
 
 | Layer | Choice | Why |
