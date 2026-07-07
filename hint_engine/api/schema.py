@@ -10,7 +10,7 @@ from hint_engine.eval_cases import EVAL_CASES
 from hint_engine.evaluation import CheckResult, EvalReport
 from hint_engine.generate import generate_hint
 from hint_engine.judge import JudgeResult, judge_hint
-from hint_engine.models import EvalCase, Hint, HintRequest
+from hint_engine.models import ConversationTurn, EvalCase, Hint, HintRequest
 
 
 def _get_eval_case(case_id: str) -> EvalCase:
@@ -21,12 +21,19 @@ def _get_eval_case(case_id: str) -> EvalCase:
 
 
 @strawberry.input
+class ConversationTurnInput:
+    role: str  # "student" | "tutor"
+    text: str
+
+
+@strawberry.input
 class HintRequestInput:
     problem: str
     student_answer: str
     grade_level: str | None = None
     subject: str | None = None
     correct_answer: str | None = None
+    history: list[ConversationTurnInput] | None = None
 
 
 @strawberry.type
@@ -204,11 +211,19 @@ class Mutation:
     @strawberry.mutation
     def generate_hint(self, request: HintRequestInput) -> HintType:
         """Generate a pedagogical hint. LLM path is answer-blind; correct_answer gates only."""
+        history = [
+            ConversationTurn(
+                role="student" if turn.role == "student" else "tutor",
+                text=turn.text,
+            )
+            for turn in (request.history or [])
+        ]
         hint_request = HintRequest(
             problem=request.problem,
             student_answer=request.student_answer,
             grade_level=request.grade_level,
             subject=request.subject,
+            history=history,
         )
         correct_answer = resolve_correct_answer(
             request.problem,

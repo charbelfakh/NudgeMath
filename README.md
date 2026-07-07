@@ -63,7 +63,7 @@ Evaluation has two layers: **deterministic gates** (must-pass, fast, reproducibl
 
 ### Deterministic gates (`hint_engine/evaluation.py`)
 
-- **does_not_reveal_answer** — normalized correct-answer value must not appear in hint text; numeric answers also checked via word-boundary regex (documented false positives: e.g. "step 7"); fraction literals checked when applicable
+- **does_not_reveal_answer** — normalized correct-answer value must not appear in hint text; pure-digit answers use word-boundary matching and ignore positional phrases (so "step 7" is **not** flagged when the answer is 7), while tiny numbers 1–5 fall back to substring; fraction literals checked when applicable. Semantic paraphrases stay out of scope (the judge covers them). A case can opt out of a specific gate via `expectations["skip_checks"]`.
 - **reveals_answer_flag** — hint must not self-report `reveals_answer=True`
 - **non_empty** — hint text is non-empty after strip
 - **within_max_length** — hint length ≤ 600 characters
@@ -116,9 +116,12 @@ Generation and judge default to the **same model** but can diverge via separate 
 
 ```powershell
 $env:ANTHROPIC_API_KEY="your-key-here"
-python -m hint_engine.run_eval          # deterministic only (fast, free)
-python -m hint_engine.run_eval --judge  # + LLM-judge scoring per case
+python -m hint_engine.run_eval                     # deterministic only (fast, free)
+python -m hint_engine.run_eval --judge             # + LLM-judge scoring per case
+python -m hint_engine.run_eval --json reports/run.json  # also write per-case report envelopes
 ```
+
+Seed cases live in `hint_engine/data/eval_cases.jsonl` (one case per line) — grow the dataset by adding rows, no code change. `--json` writes the full per-case `EvalReport` envelopes so runs are trackable over time / across models.
 
 Prints a one-line PASS/FAIL summary per seed case (with judge score when `--judge`), plus deterministic and overall tallies. CI tests mock all API calls; these commands hit the real LLM when configured.
 
@@ -184,7 +187,9 @@ mutation {
 
 ## Frontend
 
-Stack: **Vite 8.0.12 + React 19.2.6 + TypeScript 6.0 + Tailwind CSS 4.3 + Apollo Client 4.2.3 + GraphQL Code Generator 7.1.3** (`frontend/`).
+Stack: **Vite 8.0.12 + React 19.2.6 + TypeScript 6.0 + Tailwind CSS 4.3 + Apollo Client 4.2.3 + GraphQL Code Generator 7.1.3 + KaTeX** (`frontend/`).
+
+Math renders accurately through a shared `MathText` component: LaTeX in the LLM's hint output (`$…$`, `\(…\)`, `\[…\]`) is rendered with **KaTeX**, caret exponents like `2^5` become superscripts, and unicode math (`2³`, `×`, `÷`) passes through. Every problem/hint/answer surface — the hint thread, the live problem preview, and the eval report card — uses it.
 
 Types flow **schema → SDL → codegen → client** — no hand-written interfaces mirroring the server. Codegen reads the committed `schema.graphql` at the repo root (not the live endpoint), so the repo builds on clone without the server running or an API key.
 
@@ -217,13 +222,13 @@ For live hints, run Ollama and pull the default model first:
 ollama pull llama3.2
 ```
 
-**Try it:** problem `Solve for x: 2x - 5 = 9`, student answer `x = 2` → hint; `x = 7` → “Your answer looks correct — no hint needed.”
+**Try it:** problem `Solve for x: 2x - 5 = 9`, student answer `x = 2` → hint; `x = 7` → “Your answer looks correct — no hint needed.” Submit another attempt after a hint and the prior exchange is sent back as `history`, so the tutor builds on it (multi-turn) — still answer-blind.
 
 ### Views
 
 | View | GraphQL | Boundary |
 |------|---------|----------|
-| **Hint** (student) | `generateHint` only | LLM answer-blind; optional `correctAnswer` on input gates hints only |
+| **Hint** (student) | `generateHint` only | LLM answer-blind; multi-turn (accumulates a `history` thread across attempts); optional `correctAnswer` on input gates hints only |
 | **Eval** (admin/portfolio) | `hints` + `evaluateCase` | Answer-aware — shows seed cases, full `EvalReportType` report card |
 
 The eval report card uses one `CheckResultRow` component for both deterministic checks and judge rubric items (uniform `{ name, passed, detail }` shape). Pass/fail is color-coded; advisory signals (`flagDisagreement`, `modelAnswerDisagreement`) are visible on the eval view.
@@ -236,13 +241,14 @@ cd frontend ; npm test    # Vitest + React Testing Library, mocked Apollo
 
 GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push and PR — **fully offline**, no `ANTHROPIC_API_KEY`. Generation and judge are mocked in tests; the **deterministic gate** (pytest), not the LLM-judge, blocks the build.
 
-| Job | What it guards |
-|-----|----------------|
-| **Python tests** | Deterministic gates, answer-blind introspection, envelope agreement, mocked API |
-| **SDL drift check** | Committed `schema.graphql` matches `python -m hint_engine.api.export_schema` |
-| **Frontend** | Codegen output committed (`git diff src/generated/`), then `npm run build` + `npm test` |
+| Job | What it guards | Run locally |
+|-----|----------------|-------------|
+| **Ruff lint** | Python style + correctness lint (imports, unused, bugbear, pyupgrade) | `ruff check .` |
+| **Python tests** | Deterministic gates, answer-blind introspection, envelope agreement, mocked API | `pytest -q` |
+| **SDL drift check** | Committed `schema.graphql` matches `python -m hint_engine.api.export_schema` | re-export, then `git diff schema.graphql` |
+| **Frontend** | Codegen output committed (`git diff src/generated/`), then build + tests | `cd frontend ; npm run build ; npm test` |
 
-Jobs run **in parallel** so the Actions tab shows three named checks — easy for a portfolio reviewer to see which layer broke.
+Jobs run **in parallel** so the Actions tab shows four named checks — easy for a portfolio reviewer to see which layer broke.
 
 Re-export SDL when the Python schema changes:
 
@@ -282,11 +288,14 @@ If `Activate.ps1` fails with an execution-policy error: `Set-ExecutionPolicy -Sc
 ```
 hint_engine/
   ...
+  data/
+    eval_cases.jsonl   # seed eval dataset (one case per line), loaded by eval_cases.py
   api/
     schema.py
     app.py
     export_schema.py   # SDL export for frontend codegen
 schema.graphql         # committed SDL (codegen source of truth)
+ruff.toml              # Python lint config
 frontend/
   src/
     generated/         # GraphQL Code Generator output (committed)

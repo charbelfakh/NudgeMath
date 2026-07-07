@@ -10,7 +10,6 @@ from hint_engine.evaluation import run_deterministic_checks
 from hint_engine.judge import JudgeResult
 from hint_engine.model_comparison import build_comparison_table, format_comparison_table
 from hint_engine.models import Hint
-
 from tests.fixtures_hints import ALGEBRA_CASE, GOOD_ALGEBRA_HINT
 
 JUDGE_ENV_KEYS = (

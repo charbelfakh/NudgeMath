@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -20,6 +21,18 @@ BANNED_PHRASES = [
 
 _ANSWER_PREFIX = re.compile(r"^x\s*=\s*", re.IGNORECASE)
 _FRACTION_IN_ANSWER = re.compile(r"\d+/\d+")
+
+# Map Unicode superscript digits to ASCII so "2⁵" and a typed "2^5" compare equal.
+_SUPERSCRIPT_TO_ASCII = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹", "0123456789")
+_SUPERSCRIPT_RUN = re.compile(r"[⁰¹²³⁴⁵⁶⁷⁸⁹]+")
+
+# A bare number preceded by one of these words is a positional reference ("step 7",
+# "part 3", "question 2"), not the answer being leaked — so we don't flag it.
+_POSITIONAL_PREFIX = re.compile(
+    r"(?:step|steps|part|parts|question|questions|section|problem|problems|"
+    r"example|line|number|no\.?|#)\s*$",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -112,8 +125,15 @@ def _find_check(checks: list[CheckResult], name: str) -> CheckResult | None:
     return None
 
 
+def _normalize_superscripts(text: str) -> str:
+    """Rewrite superscript exponent runs to caret form: "2⁵" -> "2^5", "2¹⁰" -> "2^10"."""
+    return _SUPERSCRIPT_RUN.sub(
+        lambda m: "^" + m.group(0).translate(_SUPERSCRIPT_TO_ASCII), text
+    )
+
+
 def _normalize_text(text: str) -> str:
-    return text.lower().strip()
+    return _normalize_superscripts(text.lower().strip())
 
 
 def _extract_answer_value(correct_answer: str) -> str:
@@ -125,16 +145,15 @@ _COMMON_SMALL_NUMBERS = frozenset(str(n) for n in range(1, 6))
 
 
 def _answer_leak_checks(answer_value: str) -> list[tuple[str, str]]:
-    """Return ordered (check_label, needle) pairs for leakage detection."""
+    """Return ordered (check_label, needle) substring pairs for leakage detection.
+
+    Pure-digit answers (except tiny 1–5) are handled separately by `_numeric_leak`,
+    which is word-boundary aware; everything else uses substring + fraction literals.
+    """
     if not answer_value:
         return []
 
     checks: list[tuple[str, str]] = [("normalized_substring", answer_value)]
-
-    # Skip word-boundary check for very common small numbers (1–5): the false-positive
-    # rate is too high (e.g. "step 3", "try again in 2 steps") to be meaningful.
-    if re.fullmatch(r"\d+", answer_value) and answer_value not in _COMMON_SMALL_NUMBERS:
-        checks.append(("numeric_word_boundary", rf"\b{re.escape(answer_value)}\b"))
 
     fraction = _FRACTION_IN_ANSWER.search(answer_value)
     if fraction:
@@ -143,12 +162,28 @@ def _answer_leak_checks(answer_value: str) -> list[tuple[str, str]]:
     return checks
 
 
+def _numeric_leak(hint_normalized: str, value: str) -> bool:
+    """True if the bare number `value` appears as a genuine leak in the hint.
+
+    Uses word boundaries (so "7" does not match inside "17") and ignores positional
+    references like "step 7" / "part 7" — a mention of the answer number is only a leak
+    when it is not introduced by a positional word.
+    """
+    for match in re.finditer(rf"\b{re.escape(value)}\b", hint_normalized):
+        preceding = hint_normalized[: match.start()]
+        if not _POSITIONAL_PREFIX.search(preceding):
+            return True
+    return False
+
+
 def check_does_not_reveal_answer(case: EvalCase, hint: Hint) -> CheckResult:
     """Fail if the correct answer (or guarded numeric/fraction literals) appears in hint_text.
 
-    Known false positives: numeric word-boundary match may fire on unrelated numbers
-    (e.g. "step 7" when the answer is 7). Semantic paraphrases ("you'll end up with
-    seven") are out of scope — handled by the LLM-judge.
+    Pure-digit answers are matched on word boundaries and positional mentions ("step 7"
+    when the answer is 7) are ignored — a meaningful reduction of the old false positives.
+    Very common small numbers (1–5) still fall back to substring matching (too ambiguous
+    to word-boundary reliably). Semantic paraphrases ("you'll end up with seven") remain
+    out of scope — handled by the LLM-judge.
     """
     name = "does_not_reveal_answer"
     answer_value = _extract_answer_value(case.correct_answer)
@@ -161,19 +196,27 @@ def check_does_not_reveal_answer(case: EvalCase, hint: Hint) -> CheckResult:
 
     hint_normalized = _normalize_text(hint.hint_text)
 
+    if re.fullmatch(r"\d+", answer_value) and answer_value not in _COMMON_SMALL_NUMBERS:
+        if _numeric_leak(hint_normalized, answer_value):
+            return CheckResult(
+                name=name,
+                passed=False,
+                detail=(
+                    f"Hint text states the answer number {answer_value!r} outside a "
+                    f"positional phrase (i.e. not 'step {answer_value}')."
+                ),
+            )
+        return CheckResult(
+            name=name,
+            passed=True,
+            detail=(
+                f"Answer number {answer_value!r} not found in hint text "
+                f"(positional mentions like 'step {answer_value}' ignored)."
+            ),
+        )
+
     for label, needle in _answer_leak_checks(answer_value):
-        if label == "numeric_word_boundary":
-            if re.search(needle, hint_normalized):
-                return CheckResult(
-                    name=name,
-                    passed=False,
-                    detail=(
-                        f"Hint text matches numeric word-boundary pattern for "
-                        f"{answer_value!r} (may false-positive on unrelated numbers "
-                        f"like 'step {answer_value}')."
-                    ),
-                )
-        elif needle in hint_normalized:
+        if needle in hint_normalized:
             return CheckResult(
                 name=name,
                 passed=False,
@@ -257,17 +300,25 @@ def check_no_banned_phrases(case: EvalCase, hint: Hint) -> CheckResult:
     )
 
 
-_DETERMINISTIC_CHECKS = [
-    check_does_not_reveal_answer,
-    check_reveals_answer_flag,
-    check_non_empty,
-    check_within_max_length,
-    check_no_banned_phrases,
+_DETERMINISTIC_CHECKS: list[tuple[str, Callable[[EvalCase, Hint], CheckResult]]] = [
+    ("does_not_reveal_answer", check_does_not_reveal_answer),
+    ("reveals_answer_flag", check_reveals_answer_flag),
+    ("non_empty", check_non_empty),
+    ("within_max_length", check_within_max_length),
+    ("no_banned_phrases", check_no_banned_phrases),
 ]
 
 
 def run_deterministic_checks(case: EvalCase, hint: Hint) -> EvalReport:
-    """Run all deterministic gates and return a combined report."""
-    # TODO: make checks conditional on case.expectations (e.g. skip length gate when not required).
-    checks = [check(case, hint) for check in _DETERMINISTIC_CHECKS]
+    """Run the deterministic gates and return a combined report.
+
+    A case may opt out of specific checks via ``expectations["skip_checks"]`` (a list of
+    check names) — e.g. a free-form explanation case can skip ``within_max_length``.
+    Safety gates (``does_not_reveal_answer``) should not be skipped; the mechanism is
+    generic but exists for length/format leniency. Default: every check runs.
+    """
+    skip = set(case.expectations.get("skip_checks") or [])
+    checks = [
+        check(case, hint) for name, check in _DETERMINISTIC_CHECKS if name not in skip
+    ]
     return EvalReport(case=case, hint=hint, checks=checks)

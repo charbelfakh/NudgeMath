@@ -4,9 +4,8 @@ from hint_engine.eval_cases import EVAL_CASES
 from hint_engine.evaluation import EvalReport, run_deterministic_checks
 from hint_engine.judge import JudgeResult, judge_hint
 from hint_engine.models import Hint
-
 from tests.fixtures_hints import ALGEBRA_CASE, GOOD_ALGEBRA_HINT
-from tests.llm_mocks import MockLLMClient, TEST_JUDGE_CONFIG
+from tests.llm_mocks import TEST_JUDGE_CONFIG, MockLLMClient
 
 
 def _canned_rubric(

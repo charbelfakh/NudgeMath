@@ -1,5 +1,6 @@
 import { CheckResultRow } from "./CheckResultRow";
 import { VerdictBadge } from "./VerdictBadge";
+import { MathText } from "./MathText";
 import type { EvaluateCaseMutation } from "../generated/graphql";
 
 export type EvalReportData = NonNullable<
@@ -18,13 +19,15 @@ export function EvalReportCard({ report }: EvalReportCardProps) {
           <h3 className="text-lg font-semibold text-slate-900">
             {report.caseId ?? "Eval report"}
           </h3>
-          <p className="mt-1 text-sm text-slate-600">{report.problem}</p>
+          <p className="mt-1 text-sm text-slate-600">
+            <MathText>{report.problem}</MathText>
+          </p>
         </div>
         <VerdictBadge passed={report.passed} label="Overall" />
       </header>
 
       <p className="rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">
-        {report.summary}
+        <MathText>{report.summary}</MathText>
       </p>
 
       <section className="space-y-3">
@@ -63,7 +66,9 @@ export function EvalReportCard({ report }: EvalReportCardProps) {
           <p className="text-xs uppercase tracking-wide text-slate-500">
             Hint preview
           </p>
-          <p className="mt-1 text-sm text-slate-800">{report.hintText}</p>
+          <p className="mt-1 text-sm text-slate-800">
+            <MathText>{report.hintText}</MathText>
+          </p>
           <p className="mt-2 text-xs text-slate-500">
             Model self-report reveals answer:{" "}
             <span className="font-medium">

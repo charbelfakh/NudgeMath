@@ -4,6 +4,11 @@ type CheckResultType {
   detail: String!
 }
 
+input ConversationTurnInput {
+  role: String!
+  text: String!
+}
+
 type DeterministicResultType {
   passed: Boolean!
   checks: [CheckResultType!]!
@@ -45,6 +50,7 @@ input HintRequestInput {
   gradeLevel: String = null
   subject: String = null
   correctAnswer: String = null
+  history: [ConversationTurnInput!] = null
 }
 
 type HintType {

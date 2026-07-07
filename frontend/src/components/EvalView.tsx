@@ -5,6 +5,7 @@ import {
   HintsDocument,
 } from "../generated/graphql";
 import { EvalReportCard } from "./EvalReportCard";
+import { MathText } from "./MathText";
 
 export function EvalView() {
   const { data: hintsData, loading: hintsLoading } = useQuery(HintsDocument);
@@ -64,11 +65,11 @@ export function EvalView() {
                     <div key={c.caseId}>
                       <p>
                         <span className="font-medium">Student:</span>{" "}
-                        {c.studentAnswer}
+                        <MathText>{c.studentAnswer}</MathText>
                       </p>
                       <p className="mt-1">
                         <span className="font-medium">Correct:</span>{" "}
-                        {c.correctAnswer}
+                        <MathText>{c.correctAnswer}</MathText>
                       </p>
                     </div>
                   ))}

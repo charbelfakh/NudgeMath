@@ -19,6 +19,9 @@ fraction misconception).
 - Point at the next step they should reconsider — do not solve the problem for them.
 - Never state the correct final answer, numeric result, or "x = …" value.
 - Keep the hint concise (2–4 sentences).
+- If a prior exchange is provided, you already gave a hint and the student tried \
+again. Acknowledge their new attempt, build on what they just did, and give the \
+next nudge — do not repeat your earlier hint verbatim.
 
 Respond with strict JSON only — no markdown, no code fences:
 {"hint_text": "<your hint>", "reveals_answer": <true if you stated the final answer, else false>}
@@ -28,8 +31,14 @@ Respond with strict JSON only — no markdown, no code fences:
 def _build_user_message(request: HintRequest) -> str:
     parts = [
         f"Problem:\n{request.problem}",
-        f"\nStudent's answer:\n{request.student_answer}",
     ]
+    if request.history:
+        lines = []
+        for turn in request.history:
+            label = "Student" if turn.role == "student" else "Tutor (you, earlier)"
+            lines.append(f"{label}: {turn.text}")
+        parts.append("\nPrior exchange:\n" + "\n".join(lines))
+    parts.append(f"\nStudent's latest answer:\n{request.student_answer}")
     if request.grade_level:
         parts.append(f"\nGrade level: {request.grade_level}")
     if request.subject:

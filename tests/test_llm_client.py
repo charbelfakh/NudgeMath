@@ -1,13 +1,11 @@
 import json
 
-from hint_engine.config import ModelConfig
 from hint_engine.generate import generate_hint
 from hint_engine.judge import judge_hint
 from hint_engine.llm_client import OpenAICompatibleClient
 from hint_engine.models import HintRequest
-
 from tests.fixtures_hints import ALGEBRA_CASE, GOOD_ALGEBRA_HINT
-from tests.llm_mocks import MockLLMClient, TEST_GEN_CONFIG, TEST_JUDGE_CONFIG
+from tests.llm_mocks import TEST_GEN_CONFIG, TEST_JUDGE_CONFIG, MockLLMClient
 
 
 def test_openai_compatible_client_complete(monkeypatch):

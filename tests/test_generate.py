@@ -1,12 +1,10 @@
 import json
-from unittest.mock import patch
 
 from hint_engine.eval_cases import EVAL_CASES
 from hint_engine.evaluation import check_does_not_reveal_answer, run_deterministic_checks
 from hint_engine.generate import generate_hint
-from hint_engine.models import Hint, HintRequest
-
-from tests.llm_mocks import MockLLMClient, TEST_GEN_CONFIG
+from hint_engine.models import ConversationTurn, Hint, HintRequest
+from tests.llm_mocks import TEST_GEN_CONFIG, MockLLMClient
 
 
 def test_generate_hint_parses_canned_json():
@@ -64,6 +62,48 @@ def test_strips_code_fences_from_json():
 
     assert hint.hint_text == "Multiply before adding."
     assert "error" not in hint.meta
+
+
+def test_followup_turn_includes_history_in_prompt():
+    client = MockLLMClient(
+        json.dumps(
+            {
+                "hint_text": "Good — now apply that sign fix to both sides.",
+                "reveals_answer": False,
+            }
+        )
+    )
+    request = HintRequest(
+        problem="Solve for x: 2x - 5 = 9",
+        student_answer="x = 4",
+        history=[
+            ConversationTurn(role="student", text="x = 2"),
+            ConversationTurn(
+                role="tutor", text="Check the sign when you move -5 across."
+            ),
+        ],
+    )
+    hint = generate_hint(request, client=client, config=TEST_GEN_CONFIG)
+
+    assert hint.hint_text == "Good — now apply that sign fix to both sides."
+    # The model received the prior exchange and the latest attempt.
+    assert len(client.calls) == 1
+    _system, user = client.calls[0]
+    assert "Prior exchange:" in user
+    assert "Student: x = 2" in user
+    assert "Tutor (you, earlier): Check the sign" in user
+    assert "Student's latest answer:\nx = 4" in user
+
+
+def test_first_turn_has_no_prior_exchange_section():
+    client = MockLLMClient(
+        json.dumps({"hint_text": "Re-check your sign.", "reveals_answer": False})
+    )
+    request = HintRequest(problem="Solve for x: 2x - 5 = 9", student_answer="x = 2")
+    generate_hint(request, client=client, config=TEST_GEN_CONFIG)
+
+    _system, user = client.calls[0]
+    assert "Prior exchange:" not in user
 
 
 def test_eval_report_to_dict_envelope():

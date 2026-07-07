@@ -1,9 +1,7 @@
 from hint_engine.eval_cases import EVAL_CASES
-from hint_engine.evaluation import EvalReport, run_deterministic_checks
 from hint_engine.generate import generate_hint
 from hint_engine.models import EvalCase, Hint, HintRequest
-
-from tests.llm_mocks import MockLLMClient, TEST_GEN_CONFIG
+from tests.llm_mocks import TEST_GEN_CONFIG, MockLLMClient
 
 
 def test_hint_request_round_trip():

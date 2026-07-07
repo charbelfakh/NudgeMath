@@ -11,7 +11,7 @@ from hint_engine.evaluation import EvalReport, run_deterministic_checks
 from hint_engine.generate import generate_hint
 from hint_engine.judge import judge_hint
 from hint_engine.llm_client import LLMClient
-from hint_engine.models import EvalCase, HintRequest
+from hint_engine.models import EvalCase
 from hint_engine.run_eval import case_to_request
 
 

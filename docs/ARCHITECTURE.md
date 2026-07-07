@@ -58,7 +58,7 @@ flowchart LR
 | **Rule** | `generate_hint(HintRequest)` never receives `correct_answer`. Production generation cannot leak an answer from an input field. |
 | **GraphQL** | `HintRequestInput` and `HintType` have no `correctAnswer`. Introspection test fails CI if `correctAnswer` becomes reachable from the generation path. |
 | **Frontend** | `GenerateHintMutation` type tree has no answer field — the compiler enforces the boundary in the browser. |
-| **Test** | `tests/test_api.py::test_generation_path_has_no_correct_answer_field` |
+| **Test** | `tests/test_api.py::test_generation_path_has_no_correct_answer_on_output` |
 
 ### 2. Envelope agreement
 
@@ -95,11 +95,13 @@ This is stated explicitly in the README — a deliberate product boundary, not a
 
 ### Deterministic gates (five)
 
-1. `does_not_reveal_answer` — normalized value + numeric/fraction regex (documented false positives)
+1. `does_not_reveal_answer` — normalized value match; pure-digit answers use word boundaries and ignore positional phrases ("step 7" ≠ leak), tiny numbers 1–5 fall back to substring, plus fraction literals
 2. `reveals_answer_flag` — model self-report must not claim leakage
 3. `non_empty`
 4. `within_max_length` (600 chars)
 5. `no_banned_phrases`
+
+A case may opt out of a specific gate via `expectations["skip_checks"]` (default: all five run); safety gates should not be skipped. Seed cases live in `hint_engine/data/eval_cases.jsonl` — the dataset grows as data, not code.
 
 ### Judge rubric (four)
 
@@ -131,11 +133,12 @@ This is stated explicitly in the README — a deliberate product boundary, not a
 
 All CI jobs run without `ANTHROPIC_API_KEY`. LLM generation and judge are mocked in tests.
 
-| Job | Guard |
-|-----|--------|
-| **Python tests** | Deterministic gates, envelope test, answer-blind introspection, API mocks |
-| **SDL drift** | Committed `schema.graphql` matches Strawberry export |
-| **Frontend** | Codegen output committed; build + Vitest pass |
+| Job | Guard | Run locally |
+|-----|-------|-------------|
+| **Ruff lint** | Python style + correctness (imports, unused, bugbear, pyupgrade) | `ruff check .` |
+| **Python tests** | Deterministic gates, envelope test, answer-blind introspection, API mocks | `pytest -q` |
+| **SDL drift** | Committed `schema.graphql` matches Strawberry export | `python -m hint_engine.api.export_schema` → `git diff schema.graphql` |
+| **Frontend** | Codegen output committed; build + Vitest pass | `cd frontend ; npm run build ; npm test` |
 
 The **deterministic gate**, not the judge, blocks the build.
 
@@ -148,6 +151,6 @@ The **deterministic gate**, not the judge, blocks the build.
 | Hint logic | Python 3.11, dataclasses, Anthropic SDK |
 | Eval harness | `run_eval.py`, fixture-tested gates + optional `--judge` |
 | API | Strawberry GraphQL 0.319, FastAPI 0.138, Uvicorn |
-| Frontend | Vite 8, React 19, TypeScript, Tailwind 4, Apollo Client 4, GraphQL Code Generator 7 |
+| Frontend | Vite 8, React 19, TypeScript, Tailwind 4, Apollo Client 4, GraphQL Code Generator 7, KaTeX (math rendering) |
 
 Types flow **schema → SDL → codegen → client** so the stack stays typed end to end.

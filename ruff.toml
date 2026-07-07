@@ -1,0 +1,9 @@
+# Lint config for the Python hint engine + tests. Frontend and the venv are excluded.
+target-version = "py311"
+line-length = 100
+extend-exclude = [".venv", "frontend", "build", "dist"]
+
+[lint]
+# Correctness-leaning set: pyflakes (F), a curated slice of pycodestyle errors,
+# warnings (W), import sorting (I), bugbear (B), and pyupgrade (UP).
+select = ["E4", "E7", "E9", "F", "W", "I", "B", "UP"]

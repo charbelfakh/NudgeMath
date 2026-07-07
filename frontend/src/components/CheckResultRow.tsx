@@ -1,3 +1,5 @@
+import { MathText } from "./MathText";
+
 export type CheckResultData = {
   name: string;
   passed: boolean;
@@ -27,7 +29,9 @@ export function CheckResultRow({ check }: CheckResultRowProps) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-medium text-slate-900">{check.name}</p>
-        <p className="text-sm text-slate-600">{check.detail}</p>
+        <p className="text-sm text-slate-600">
+          <MathText>{check.detail}</MathText>
+        </p>
       </div>
     </li>
   );

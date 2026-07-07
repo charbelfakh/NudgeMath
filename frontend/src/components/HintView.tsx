@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { useMutation } from "@apollo/client/react";
 import { GenerateHintDocument } from "../generated/graphql";
+import { MathText } from "./MathText";
+
+type Turn = { role: "student" | "tutor"; text: string };
 
 export function HintView() {
   const [problem, setProblem] = useState("Solve for x: 2x - 5 = 9");
@@ -8,6 +11,7 @@ export function HintView() {
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [gradeLevel, setGradeLevel] = useState("");
   const [subject, setSubject] = useState("");
+  const [history, setHistory] = useState<Turn[]>([]);
 
   const [generateHint, { data, loading, error }] = useMutation(
     GenerateHintDocument,
@@ -15,20 +19,42 @@ export function HintView() {
 
   const hint = data?.generateHint;
   const metaError = hint?.meta.error;
+  const isFollowUp = history.length > 0;
+
+  function onProblemChange(value: string) {
+    setProblem(value);
+    // History is tied to one problem; editing the problem starts a fresh thread.
+    if (history.length > 0) setHistory([]);
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    await generateHint({
+    const attempt = studentAnswer;
+    const result = await generateHint({
       variables: {
         request: {
           problem,
-          studentAnswer,
+          studentAnswer: attempt,
           correctAnswer: correctAnswer || null,
           gradeLevel: gradeLevel || null,
           subject: subject || null,
+          history:
+            history.length > 0
+              ? history.map((t) => ({ role: t.role, text: t.text }))
+              : null,
         },
       },
     });
+    const next = result.data?.generateHint;
+    // Extend the thread only on a real hint — not "already correct", not a generation error.
+    if (next && !next.answerCorrect && next.hintText && !next.meta.error) {
+      setHistory((prev) => [
+        ...prev,
+        { role: "student", text: attempt },
+        { role: "tutor", text: next.hintText },
+      ]);
+      setStudentAnswer("");
+    }
   }
 
   return (
@@ -36,9 +62,10 @@ export function HintView() {
       <div>
         <h2 className="text-xl font-semibold text-slate-900">Get a hint</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Hint generation is answer-blind. Optional correct answer is used only
-          to skip hints when the student is already right (seed cases match
-          automatically).
+          Hint generation is answer-blind. Submit another attempt after a hint to
+          build a multi-turn nudge — the tutor sees the prior exchange but never
+          the correct answer. Optional correct answer is used only to skip hints
+          when the student is already right (seed cases match automatically).
         </p>
       </div>
 
@@ -52,13 +79,18 @@ export function HintView() {
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             rows={3}
             value={problem}
-            onChange={(e) => setProblem(e.target.value)}
+            onChange={(e) => onProblemChange(e.target.value)}
             required
           />
+          {problem.trim() && (
+            <span className="block text-xs text-slate-500">
+              Preview: <MathText className="text-slate-700">{problem}</MathText>
+            </span>
+          )}
         </label>
         <label className="block space-y-1">
           <span className="text-sm font-medium text-slate-700">
-            Student answer
+            {isFollowUp ? "Your next attempt" : "Student answer"}
           </span>
           <input
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
@@ -100,14 +132,54 @@ export function HintView() {
             />
           </label>
         </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {loading ? "Generating…" : "Generate hint"}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {loading
+              ? "Generating…"
+              : isFollowUp
+                ? "Send next attempt"
+                : "Generate hint"}
+          </button>
+          {isFollowUp && (
+            <button
+              type="button"
+              onClick={() => setHistory([])}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Reset conversation
+            </button>
+          )}
+        </div>
       </form>
+
+      {history.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Conversation
+          </h3>
+          {history.map((turn, i) => (
+            <div
+              key={i}
+              className={
+                turn.role === "student"
+                  ? "rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+                  : "rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3"
+              }
+            >
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                {turn.role === "student" ? "Student attempt" : "Tutor hint"}
+              </p>
+              <p className="mt-1 text-sm text-slate-800">
+                <MathText>{turn.text}</MathText>
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div
@@ -118,31 +190,33 @@ export function HintView() {
         </div>
       )}
 
-      {hint && !hint.answerCorrect && (
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          {metaError && (
+      {hint &&
+        !hint.answerCorrect &&
+        (metaError ? (
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div
               role="alert"
               className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
             >
               Generation error: {metaError}
             </div>
-          )}
-          <div>
-            <h3 className="font-medium text-slate-900">Hint</h3>
-            <p className="mt-2 text-slate-700">{hint.hintText || "—"}</p>
+            <p className="mt-2 text-slate-700">
+              {hint.hintText ? <MathText>{hint.hintText}</MathText> : "—"}
+            </p>
           </div>
-          <p className="text-sm text-slate-600">
-            Model self-report — reveals answer:{" "}
-            <span className="font-medium">
-              {hint.revealsAnswer ? "yes" : "no"}
-            </span>
-          </p>
-          {hint.meta.model && (
-            <p className="text-xs text-slate-500">Model: {hint.meta.model}</p>
-          )}
-        </div>
-      )}
+        ) : (
+          <div className="space-y-1 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-slate-600">
+              Model self-report — reveals answer:{" "}
+              <span className="font-medium">
+                {hint.revealsAnswer ? "yes" : "no"}
+              </span>
+            </p>
+            {hint.meta.model && (
+              <p className="text-xs text-slate-500">Model: {hint.meta.model}</p>
+            )}
+          </div>
+        ))}
 
       {hint?.answerCorrect && (
         <div

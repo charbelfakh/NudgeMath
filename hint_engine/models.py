@@ -1,4 +1,19 @@
 from dataclasses import dataclass, field
+from typing import Literal
+
+TurnRole = Literal["student", "tutor"]
+
+
+@dataclass
+class ConversationTurn:
+    """One prior message in a multi-turn hint exchange.
+
+    Only ever holds student attempts and prior tutor hints — never the correct
+    answer — so the conversation history stays answer-blind by construction.
+    """
+
+    role: TurnRole
+    text: str
 
 
 @dataclass
@@ -9,6 +24,7 @@ class HintRequest:
     student_answer: str
     grade_level: str | None = None
     subject: str | None = None
+    history: list[ConversationTurn] = field(default_factory=list)
 
 
 @dataclass

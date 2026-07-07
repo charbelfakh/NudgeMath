@@ -5,8 +5,7 @@ from strawberry.printer import print_schema
 
 from hint_engine.api.schema import GENERATION_ROOT_TYPES, schema
 from hint_engine.eval_cases import EVAL_CASES
-
-from tests.llm_mocks import MockLLMClient, TEST_GEN_CONFIG, TEST_JUDGE_CONFIG
+from tests.llm_mocks import TEST_GEN_CONFIG, TEST_JUDGE_CONFIG, MockLLMClient
 
 INTROSPECTION_QUERY = """
 query Introspection {
@@ -114,6 +113,45 @@ def test_generate_hint_mutation(mock_client, mock_config):
     assert hint["answerCorrect"] is False
     assert hint["meta"]["model"] == TEST_GEN_CONFIG.model
     assert hint["meta"]["provider"] == "mock"
+
+
+@patch("hint_engine.generate.get_generation_config", return_value=TEST_GEN_CONFIG)
+@patch(
+    "hint_engine.generate.client_from_config",
+    return_value=MockLLMClient(
+        json.dumps(
+            {
+                "hint_text": "Closer — now apply the sign fix to both sides.",
+                "reveals_answer": False,
+            }
+        )
+    ),
+)
+def test_generate_hint_mutation_with_history(mock_client, mock_config):
+    query = """
+    mutation {
+      generateHint(request: {
+        problem: "Solve for x: 2x - 5 = 9"
+        studentAnswer: "x = 4"
+        history: [
+          { role: "student", text: "x = 2" }
+          { role: "tutor", text: "Check the sign when you move -5 across." }
+        ]
+      }) {
+        hintText
+        answerCorrect
+      }
+    }
+    """
+    result = schema.execute_sync(query)
+
+    assert result.errors is None
+    hint = result.data["generateHint"]
+    assert hint["answerCorrect"] is False
+    assert hint["hintText"] == "Closer — now apply the sign fix to both sides."
+    _system, user = mock_client.return_value.calls[0]
+    assert "Prior exchange:" in user
+    assert "Student's latest answer:\nx = 4" in user
 
 
 def test_generate_hint_skips_when_answer_is_correct():

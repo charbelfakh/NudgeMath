@@ -1,12 +1,21 @@
 """Run seed eval cases through LLM generation, deterministic gates, and optional judge."""
 
 import argparse
+import json
+from pathlib import Path
 
 from hint_engine.eval_cases import EVAL_CASES
 from hint_engine.evaluation import EvalReport, run_deterministic_checks
 from hint_engine.generate import generate_hint
 from hint_engine.judge import judge_hint
 from hint_engine.models import EvalCase, HintRequest
+
+
+def write_json_report(reports: list[EvalReport], path: Path) -> None:
+    """Write the full per-case report envelopes to a JSON artifact for tracking over time."""
+    payload = [report.to_dict() for report in reports]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def case_to_request(case: EvalCase) -> HintRequest:
@@ -34,6 +43,11 @@ def main() -> int:
         action="store_true",
         help="Also run LLM-judge scoring per case (slower, extra API cost).",
     )
+    parser.add_argument(
+        "--json",
+        metavar="PATH",
+        help="Write the full per-case report envelopes to a JSON artifact at PATH.",
+    )
     args = parser.parse_args()
 
     reports: list[EvalReport] = []
@@ -46,6 +60,11 @@ def main() -> int:
         if args.judge and report.judge is not None:
             line += f" (judge score: {report.judge.score:.2f})"
         print(line)
+
+    if args.json:
+        out_path = Path(args.json)
+        write_json_report(reports, out_path)
+        print(f"\nWrote per-case report JSON to {out_path}")
 
     det_passed = sum(1 for r in reports if r.deterministic_passed)
     merged_passed = sum(1 for r in reports if r.passed)
