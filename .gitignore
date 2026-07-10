@@ -12,6 +12,9 @@ __pycache__/
 .env
 .env.*
 
+# Admin accounts (scrypt password hashes) — created via manage_users, never committed
+.nudgemath/
+
 # Frontend (see also frontend/.gitignore)
 frontend/node_modules/
 frontend/dist/

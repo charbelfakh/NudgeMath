@@ -12,12 +12,161 @@ mutation GenerateHint($request: HintRequestInput!) {
   }
 }
 
+mutation TranscribeProblem($image: String!) {
+  transcribeProblem(image: $image) {
+    problem
+    studentAnswer
+    meta {
+      model
+      provider
+      latencyMs
+      error
+    }
+  }
+}
+
+mutation GenerateProblem(
+  $gradeLevel: String!
+  $topic: String
+  $difficulty: String
+  $mode: String
+) {
+  generateProblem(
+    gradeLevel: $gradeLevel
+    topic: $topic
+    difficulty: $difficulty
+    mode: $mode
+  ) {
+    problem
+    problemId
+    gradeLevel
+    topic
+    difficulty
+    source
+    verified
+    meta {
+      model
+      provider
+      error
+    }
+  }
+}
+
 query Hints {
   hints {
     caseId
     problem
     studentAnswer
     correctAnswer
+  }
+}
+
+query Curriculum($gradeLevel: String) {
+  curriculum(gradeLevel: $gradeLevel) {
+    topic
+    template
+    difficulties
+    description
+  }
+}
+
+mutation Login($username: String!, $password: String!) {
+  login(username: $username, password: $password) {
+    token
+    username
+    expiresAt
+    error
+  }
+}
+
+query AdminModels {
+  adminModels {
+    visionModel
+    generationModel
+    solverModel
+    visionPresets {
+      name
+      provider
+      model
+    }
+    generationPresets {
+      name
+      provider
+      model
+    }
+    solverPresets {
+      name
+      provider
+      model
+    }
+  }
+}
+
+mutation SetModel($kind: String!, $preset: String!) {
+  setModel(kind: $kind, preset: $preset) {
+    visionModel
+    generationModel
+    solverModel
+  }
+}
+
+mutation SolveProblem($problem: String!, $gradeLevel: String) {
+  solveProblem(problem: $problem, gradeLevel: $gradeLevel) {
+    solutionText
+    finalAnswer
+    meta {
+      model
+      provider
+      latencyMs
+      error
+    }
+  }
+}
+
+query ClaudeSubscription {
+  claudeSubscription {
+    signedIn
+    detail
+    model
+    effort
+  }
+}
+
+mutation SetClaudeEffort($effort: String) {
+  setClaudeEffort(effort: $effort) {
+    signedIn
+    effort
+  }
+}
+
+mutation StartClaudeLogin {
+  startClaudeLogin {
+    signedIn
+    url
+  }
+}
+
+mutation FinishClaudeLogin($code: String!) {
+  finishClaudeLogin(code: $code) {
+    signedIn
+    detail
+    error
+  }
+}
+
+mutation DisconnectClaudeSubscription {
+  disconnectClaudeSubscription {
+    signedIn
+    detail
+    model
+  }
+}
+
+query RevealAnswer($problemId: String!) {
+  revealAnswer(problemId: $problemId) {
+    problemId
+    correctAnswer
+    found
   }
 }
 

@@ -1,0 +1,9 @@
+{"grade_band": "elementary", "grade_range": "K-5", "topic": "arithmetic", "template": true, "difficulties": ["easy", "medium", "hard"], "description": "Whole-number addition, subtraction, and multiplication."}
+{"grade_band": "elementary", "grade_range": "K-5", "topic": "fractions", "template": false, "difficulties": ["easy", "medium", "hard"], "description": "Comparing and adding simple fractions."}
+{"grade_band": "elementary", "grade_range": "K-5", "topic": "geometry", "template": true, "difficulties": ["easy", "medium", "hard"], "description": "Area and perimeter of rectangles and triangles; basic angles."}
+{"grade_band": "middle", "grade_range": "6-8", "topic": "linear_equations", "template": true, "difficulties": ["easy", "medium", "hard"], "description": "Solve one-variable linear equations of the form ax + b = c."}
+{"grade_band": "middle", "grade_range": "6-8", "topic": "ratios", "template": false, "difficulties": ["easy", "medium", "hard"], "description": "Ratio, rate, and proportion word problems."}
+{"grade_band": "middle", "grade_range": "6-8", "topic": "geometry", "template": true, "difficulties": ["easy", "medium", "hard"], "description": "Area, perimeter, the Pythagorean theorem, and angle sums."}
+{"grade_band": "high", "grade_range": "9-12", "topic": "quadratics", "template": true, "difficulties": ["easy", "medium", "hard"], "description": "Solve quadratic equations with integer roots by factoring."}
+{"grade_band": "high", "grade_range": "9-12", "topic": "functions", "template": false, "difficulties": ["easy", "medium", "hard"], "description": "Evaluate and interpret functions and their graphs."}
+{"grade_band": "high", "grade_range": "9-12", "topic": "geometry", "template": true, "difficulties": ["easy", "medium", "hard"], "description": "Right-triangle Pythagorean problems, areas, and angle relationships."}

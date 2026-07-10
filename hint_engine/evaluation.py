@@ -11,6 +11,14 @@ if TYPE_CHECKING:
     from hint_engine.judge import JudgeResult
 
 # 4 sentences × ~60 chars each with some headroom; matches "2–4 sentences" in system prompt.
+#
+# Relationship to the model's token budget: this is a *content* ceiling checked
+# after the fact, while `client_from_config(..., max_tokens=512)` is the model's
+# *output* ceiling. 600 chars is roughly 150–200 tokens, so 512 leaves ample room
+# for the JSON envelope — a hint that trips this gate was verbose, not truncated.
+# The two are independent on purpose: if a model ever hits its token ceiling the
+# client raises (see `llm_client.truncation_error`) and the failure surfaces on
+# `meta["error"]` rather than arriving here as a silently short hint.
 MAX_HINT_CHARS = 600
 
 BANNED_PHRASES = [

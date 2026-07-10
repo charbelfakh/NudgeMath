@@ -6,9 +6,11 @@ import katex from "katex";
  *
  * - LaTeX inside `$$…$$`, `\[…\]` (display) or `$…$`, `\(…\)` (inline) is rendered with
  *   KaTeX. Invalid LaTeX falls back to its source text instead of throwing.
- * - Outside delimiters, caret exponents (`2^5`, `x^{10}`, `2^{3+2}`) become real
- *   superscripts. Unicode math (`2³`, `×`, `÷`, `≤`) already displays correctly and is
- *   passed through untouched.
+ * - Outside delimiters, caret exponents (`2^5`, `x^{10}`, `2^{3+2}`, and the noisier
+ *   `x^ {2 }`) become real superscripts. Unicode math (`2³`, `×`, `÷`, `≤`) already
+ *   displays correctly and is passed through untouched.
+ * - Literal escape sequences (`\n`, `\r`, `\t`) that survive transcription as visible
+ *   characters are collapsed to a space so the problem doesn't show raw `\n`.
  *
  * This covers both the seed problems (plain arithmetic) and LLM hint text, which often
  * comes back wrapped in LaTeX.
@@ -19,7 +21,15 @@ const MATH_SEGMENT =
   /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\$([^$\n]+?)\$|\\\(([\s\S]+?)\\\)/g;
 
 // A caret exponent: `^{…}` or `^token` (letters/digits, optional leading minus).
-const CARET_EXPONENT = /\^(?:\{([^}]*)\}|(-?[A-Za-z0-9]+))/g;
+// Tolerant of OCR/LLM spacing noise — a space after the caret and inside the
+// braces is allowed, so `x^ {2 }` renders the same as `x^{2}`.
+const CARET_EXPONENT = /\^\s*(?:\{([^}]*)\}|(-?[A-Za-z0-9]+))/g;
+
+// Literal escape sequences (`\n`, `\r`, `\t`) sometimes survive transcription as
+// two visible characters. Collapse them to a space so they don't show as raw text.
+// Not when a lowercase letter follows: that is a LaTeX command prefix (`\times`,
+// `\neq`, `\rho`, …) that must stay intact, not be mangled into " imes".
+const LITERAL_ESCAPE = /\\[nrt](?![a-z])/g;
 
 function KaTeXSpan({ latex, display }: { latex: string; display: boolean }) {
   const html = useMemo(
@@ -29,7 +39,8 @@ function KaTeXSpan({ latex, display }: { latex: string; display: boolean }) {
   return <span dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-function renderProse(text: string, keyPrefix: string): ReactNode[] {
+function renderProse(rawText: string, keyPrefix: string): ReactNode[] {
+  const text = rawText.replace(LITERAL_ESCAPE, " ");
   const nodes: ReactNode[] = [];
   let lastIndex = 0;
   let supCount = 0;
@@ -39,7 +50,7 @@ function renderProse(text: string, keyPrefix: string): ReactNode[] {
     if (match.index > lastIndex) {
       nodes.push(text.slice(lastIndex, match.index));
     }
-    const exponent = match[1] ?? match[2] ?? "";
+    const exponent = (match[1] ?? match[2] ?? "").trim();
     nodes.push(<sup key={`${keyPrefix}-sup-${supCount++}`}>{exponent}</sup>);
     lastIndex = match.index + match[0].length;
   }

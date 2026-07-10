@@ -1,12 +1,55 @@
+type AdminModelsType {
+  visionModel: String!
+  generationModel: String!
+  solverModel: String!
+  visionPresets: [ModelPresetType!]!
+  generationPresets: [ModelPresetType!]!
+  solverPresets: [ModelPresetType!]!
+}
+
+type AuthPayloadType {
+  token: String
+  username: String
+  expiresAt: Int
+  error: String
+}
+
 type CheckResultType {
   name: String!
   passed: Boolean!
   detail: String!
 }
 
+type ClaudeLoginResultType {
+  signedIn: Boolean!
+  detail: String!
+  error: String
+}
+
+type ClaudeLoginStartType {
+  signedIn: Boolean!
+  url: String
+}
+
+type ClaudeSubscriptionStatusType {
+  signedIn: Boolean!
+  detail: String!
+  model: String!
+  effort: String
+}
+
 input ConversationTurnInput {
   role: String!
   text: String!
+}
+
+type CurriculumTopicType {
+  gradeBand: String!
+  gradeRange: String!
+  topic: String!
+  template: Boolean!
+  difficulties: [String!]!
+  description: String!
 }
 
 type DeterministicResultType {
@@ -36,6 +79,17 @@ type EvalReportType {
   summary: String!
 }
 
+type GeneratedProblemType {
+  problem: String!
+  problemId: String!
+  gradeLevel: String!
+  topic: String!
+  difficulty: String!
+  source: String!
+  verified: Boolean!
+  meta: HintMetaType!
+}
+
 type HintMetaType {
   name: String
   model: String
@@ -50,6 +104,7 @@ input HintRequestInput {
   gradeLevel: String = null
   subject: String = null
   correctAnswer: String = null
+  problemId: String = null
   history: [ConversationTurnInput!] = null
 }
 
@@ -80,11 +135,48 @@ type JudgeResultType {
   meta: JudgeMetaType!
 }
 
+type ModelPresetType {
+  name: String!
+  provider: String!
+  model: String!
+}
+
 type Mutation {
   generateHint(request: HintRequestInput!): HintType!
-  evaluateCase(caseId: String!, withJudge: Boolean! = false): EvalReportType!
+  transcribeProblem(image: String!): TranscriptionType!
+  generateProblem(gradeLevel: String!, topic: String = null, difficulty: String! = "medium", mode: String! = "auto"): GeneratedProblemType!
+  login(username: String!, password: String!): AuthPayloadType!
+  evaluateCase(caseId: String!, withJudge: Boolean! = false): EvalReportType
+  setModel(kind: String!, preset: String!): AdminModelsType
+  setClaudeEffort(effort: String = null): ClaudeSubscriptionStatusType
+  startClaudeLogin: ClaudeLoginStartType
+  finishClaudeLogin(code: String!): ClaudeLoginResultType
+  disconnectClaudeSubscription: ClaudeSubscriptionStatusType
+  solveProblem(problem: String!, gradeLevel: String = null): SolutionType
 }
 
 type Query {
   hints: [EvalCaseType!]!
+  curriculum(gradeLevel: String = null): [CurriculumTopicType!]!
+  revealAnswer(problemId: String!): RevealedAnswerType
+  adminModels: AdminModelsType
+  claudeSubscription: ClaudeSubscriptionStatusType
+}
+
+type RevealedAnswerType {
+  problemId: String!
+  correctAnswer: String
+  found: Boolean!
+}
+
+type SolutionType {
+  solutionText: String!
+  finalAnswer: String!
+  meta: HintMetaType!
+}
+
+type TranscriptionType {
+  problem: String!
+  studentAnswer: String!
+  meta: HintMetaType!
 }
