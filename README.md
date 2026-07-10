@@ -80,7 +80,9 @@ Judge `passed` requires both must-pass items; `score` is the fraction of all fou
 
 ## LLM generation
 
-Generation and judge use a provider-agnostic **`LLMClient` Protocol** (`hint_engine/llm_client.py`) with an **`OpenAICompatibleClient`** implementation (`openai==2.43.0`). Model and provider are **config**, not hardcoded — resolved from environment variables via `hint_engine/config.py`.
+Generation and judge use a provider-agnostic **`LLMClient` Protocol** (`hint_engine/llm_client.py`) with two implementations: **`OpenAICompatibleClient`** (`openai==2.43.0` — Ollama, Anthropic's OpenAI-compatible endpoint, …) and **`ClaudeSubscriptionClient`** (the native Anthropic Messages API with a subscription OAuth bearer token, no API key). Both are answer-blind by construction. Model and provider are **config**, not hardcoded — resolved from environment variables via `hint_engine/config.py`, with admin runtime overrides in `hint_engine/runtime_settings.py`.
+
+Every client treats a **truncated** reply as a failure: `finish_reason: "length"` / `stop_reason: "max_tokens"` raises rather than being parsed into a silently incomplete hint, and the reason lands on `meta.error`.
 
 ### Offline by default (Ollama)
 
@@ -358,25 +360,50 @@ If `Activate.ps1` fails with an execution-policy error: `Set-ExecutionPolicy -Sc
 
 ```
 hint_engine/
-  ...
-  vision_client.py     # VisionClient Protocol + OpenAICompatible/ClaudeSubscription vision clients
+  models.py            # dataclasses: the source of truth for every shape
+  generate.py          # generate_hint(HintRequest) -> Hint  (answer-blind)
+  evaluation.py        # five deterministic gates + EvalReport envelope
+  judge.py             # LLM-judge rubric (advisory, never a build gate)
+  answer_match.py      # exact answer equivalence (Fraction-based; never approximates)
+  run_eval.py          # CLI eval runner
+  model_comparison.py  # cross-model aggregation over EvalReport
+
+  llm_client.py        # LLMClient Protocol + OpenAICompatible / ClaudeSubscription clients
+  vision_client.py     # VisionClient Protocol + OpenAICompatible / ClaudeSubscription vision
+  llm_utils.py         # shared strict-JSON parse, meta envelope, api-key guard
+  config.py            # ModelConfig resolution: override > env > default; model presets
+  runtime_settings.py  # lock-guarded admin overrides (model kinds + Claude effort)
+  claude_oauth.py      # in-app PKCE sign-in for the Claude subscription (no API key)
+  rate_limit.py        # token-bucket ceilings for the unauthenticated surface
+
   transcribe.py        # transcribe_problem(image) -> TranscriptionResult (answer-blind)
   curriculum.py        # K-12 taxonomy loader (grade band -> topics -> difficulty)
   problem_gen.py       # generate_problem(...) -> GeneratedProblem (template + LLM)
   solve.py             # solve_problem(...) -> Solution (admin-only, separate solver model)
+
+  auth.py              # scrypt password hashing + HMAC-signed session tokens
+  user_store.py        # UserStore Protocol; file-backed admin accounts
+  manage_users.py      # add / list / remove admin accounts (no creds in code)
+
   data/
     eval_cases.jsonl   # seed eval dataset (one case per line), loaded by eval_cases.py
     curriculum.jsonl   # K-12 topic taxonomy (one topic per line), loaded by curriculum.py
   api/
-    schema.py
-    app.py
+    schema.py          # resolvers + schema assembly
+    types.py           # Strawberry types, converters, GENERATION_ROOT_TYPES
+    context.py         # IsAdmin permission + rate-limit bucket key
+    limits.py          # request input ceilings
+    problem_store.py   # problemId -> answer, server-side only (in-memory | Redis)
+    app.py             # FastAPI + CORS + body-size guard + GraphQL router
     export_schema.py   # SDL export for frontend codegen
 schema.graphql         # committed SDL (codegen source of truth)
 ruff.toml              # Python lint config
 frontend/
   src/
+    auth/              # AuthProvider/useAuth + tokenStore (session persistence)
     generated/         # GraphQL Code Generator output (committed)
-    components/         # HintView (photo upload), PracticeView, EvalView, MathText, ...
+    components/        # HintView (photo upload), PracticeView, SolveProblem,
+                       #   AdminLogin, AdminPanel, EvalView, MathText, ...
     graphql/operations.graphql
-tests/                 # Python tests
+tests/                 # Python tests; conftest.py resets process-wide state
 ```
